@@ -1,0 +1,342 @@
+/*
+ * DrawTriangle - pops up a window that draws one of YOUR Triangle objects.
+ *
+ * You do NOT have to change anything in this file. It is here so you can SEE
+ * your Triangle class working. Read it if you are curious - every step is
+ * explained in plain English.
+ *
+ * HOW TO USE IT - finish Triangle.java FIRST. This file calls seven of your
+ * methods, so until they all exist it will not compile, and IntelliJ will not
+ * run anything in the project. That is why it arrives named DrawTriangle.java.txt:
+ * rename it to DrawTriangle.java once your Triangle is done.
+ *
+ * Then add these two lines to the end of main in Triangle.java:
+ *
+ *     Triangle t = new Triangle(3, 4, 5);
+ *     new DrawTriangle(t).showWindow();
+ *
+ * Call showWindow() on three different Triangles and you get three windows.
+ *
+ * WHAT IT NEEDS FROM YOUR CLASS - these seven methods:
+ *     getSide1(), getSide2(), getSide3(), perimeter(), area(),
+ *     isEquilateral(), isIsosceles()
+ * If any of them is missing or spelled differently, this file will not
+ * compile. That is your clue to check your own method names.
+ *
+ * HOW THIS FILE IS ORGANISED - the same way as your Triangle:
+ *     the CONSTRUCTOR works things out once and stores them in instance variables,
+ *     then each METHOD uses those instance variables to do one small job.
+ * Start reading at makePicture() - it is the outline. Each line of it calls
+ * one helper method further down.
+ *
+ * CODESPACES CANNOT OPEN WINDOWS. A Codespace has no screen. Run this in
+ * IntelliJ instead. In a Codespace it prints a short message and skips the window.
+ */
+
+// "import" lets us use classes that are not built into every program.
+// java.awt and javax.swing are Java's built-in tools for drawing and windows.
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
+import java.awt.Polygon;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+
+public class DrawTriangle
+{
+    // ----- Constants: the layout of the picture, in pixels -----
+
+    private static final int WIDTH  = 560;      // the whole picture
+    private static final int HEIGHT = 470;
+
+    private static final int DRAW_WIDTH  = 360; // the box the triangle must fit inside
+    private static final int DRAW_HEIGHT = 280;
+    private static final int TOP         = 50;  // gap above that box
+
+    private static final int TEXT_LEFT   = 60;  // where the text at the bottom starts
+    private static final int TEXT_ROW_1  = 410; // first line of text  (Perimeter / Equilateral)
+    private static final int TEXT_ROW_2  = 445; // second line of text (Area / Isosceles)
+
+    private static final Color DARK_BLUE  = new Color(30, 60, 140);
+    private static final Color LIGHT_BLUE = new Color(200, 225, 255);
+
+    // ----- Instance variables: worked out ONCE, in the constructor -----
+
+    private Triangle triangle;   // the Triangle we are drawing
+    private boolean possible;    // can these three sides make a triangle at all?
+
+    // Where the three corners go on the screen, in pixels.
+    // A and B are the bottom corners; T is the top.
+    private int ax, ay;
+    private int bx, by;
+    private int tx, ty;
+
+    /*
+     * The constructor remembers the Triangle, then works out where its
+     * corners go on the screen. Every method below uses these answers.
+     */
+    public DrawTriangle(Triangle triangle)
+    {
+        this.triangle = triangle;
+        placeCorners();
+    }
+
+    /*
+     * Opens a window showing the picture.
+     */
+    public void showWindow()
+    {
+        // A Codespace has no screen, so there is nowhere to put a window.
+        if (GraphicsEnvironment.isHeadless())
+        {
+            System.out.println("DrawTriangle: no screen here (are you in a Codespace?) - "
+                             + "run in IntelliJ to see the window.");
+            return;
+        }
+
+        // Step 1: draw the picture (see makePicture below).
+        BufferedImage picture = makePicture();
+
+        // Step 2: a JLabel can hold a picture. A JFrame is a window.
+        JLabel label = new JLabel(new ImageIcon(picture));
+        JFrame window = new JFrame("Triangle " + triangle.getSide1() + ", "
+                                  + triangle.getSide2() + ", " + triangle.getSide3());
+
+        // Step 3: put the label in the window, size it, and show it.
+        window.add(label);
+        window.pack();                          // shrink-wrap the window around the picture
+        window.setLocationByPlatform(true);     // so several windows don't sit exactly on top of each other
+        window.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);  // closing it closes just this one
+        window.setVisible(true);                // nothing appears until this line
+    }
+
+    /*
+     * THE OUTLINE. Makes a blank picture, draws on it, and returns it.
+     * Think of a BufferedImage as a blank sheet of paper, and Graphics2D as
+     * the pen you draw on it with. Each helper below gets the pen.
+     */
+    public BufferedImage makePicture()
+    {
+        BufferedImage picture = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D pen = picture.createGraphics();
+        clearToWhite(pen);
+
+        if (possible)
+        {
+            drawShape(pen);
+            drawSideLabels(pen);
+            drawNumbers(pen);
+            drawType(pen);
+        }
+        else
+        {
+            drawErrorMessage(pen);
+        }
+
+        pen.dispose();       // put the pen down - we are finished drawing
+        return picture;
+    }
+
+    // =====================================================================
+    //  The helpers - each one does ONE job. Read them in any order.
+    // =====================================================================
+
+    /*
+     * Fills the whole sheet with white, and turns on smooth edges.
+     */
+    private void clearToWhite(Graphics2D pen)
+    {
+        // Smooth edges instead of jagged ones. Purely cosmetic.
+        pen.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        pen.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        pen.setColor(Color.WHITE);
+        pen.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    /*
+     * Draws the triangle itself: light blue inside, dark blue outline.
+     */
+    private void drawShape(Graphics2D pen)
+    {
+        // A Polygon is just a list of corners. Add the three, then draw it.
+        Polygon shape = new Polygon();
+        shape.addPoint(ax, ay);
+        shape.addPoint(bx, by);
+        shape.addPoint(tx, ty);
+
+        pen.setColor(LIGHT_BLUE);
+        pen.fillPolygon(shape);
+
+        pen.setColor(DARK_BLUE);
+        pen.setStroke(new BasicStroke(3));      // a line 3 pixels thick
+        pen.drawPolygon(shape);
+    }
+
+    /*
+     * Writes "side1 = 5.0" (and so on) next to each side.
+     * Side1 is the bottom edge, side2 the right, side3 the left.
+     */
+    private void drawSideLabels(Graphics2D pen)
+    {
+        pen.setColor(Color.BLACK);
+        pen.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        labelSide(pen, "side1 = " + triangle.getSide1(), ax, ay, bx, by);
+        labelSide(pen, "side2 = " + triangle.getSide2(), bx, by, tx, ty);
+        labelSide(pen, "side3 = " + triangle.getSide3(), tx, ty, ax, ay);
+    }
+
+    /*
+     * Bottom left: the perimeter and area, asked from YOUR methods.
+     */
+    private void drawNumbers(Graphics2D pen)
+    {
+        // String.format("%.2f", x) means "x, rounded to 2 decimal places".
+        pen.setColor(Color.BLACK);
+        pen.setFont(new Font("SansSerif", Font.BOLD, 20));
+        pen.drawString("Perimeter: " + String.format("%.2f", triangle.perimeter()), TEXT_LEFT, TEXT_ROW_1);
+        pen.drawString("Area:      " + String.format("%.2f", triangle.area()),      TEXT_LEFT, TEXT_ROW_2);
+    }
+
+    /*
+     * Bottom right: the triangle's type, asked from YOUR two boolean methods.
+     * Each word appears only if your method returns true - so if a word you
+     * expect is missing, check that method. (An equilateral triangle IS
+     * isosceles, so 5-5-5 should show BOTH words.)
+     */
+    private void drawType(Graphics2D pen)
+    {
+        pen.setColor(DARK_BLUE);
+        pen.setFont(new Font("SansSerif", Font.BOLD, 20));
+        if (triangle.isEquilateral())
+        {
+            drawRightAligned(pen, "Equilateral", TEXT_ROW_1);
+        }
+        if (triangle.isIsosceles())
+        {
+            drawRightAligned(pen, "Isosceles", TEXT_ROW_2);
+        }
+    }
+
+    /*
+     * Shown instead of a picture when the sides cannot make a triangle.
+     */
+    private void drawErrorMessage(Graphics2D pen)
+    {
+        pen.setColor(Color.RED);
+        pen.setFont(new Font("SansSerif", Font.BOLD, 20));
+        pen.drawString("These sides cannot make a triangle:", TEXT_LEFT, 200);
+        pen.drawString(triangle.getSide1() + ", " + triangle.getSide2() + ", "
+                     + triangle.getSide3(), TEXT_LEFT, 235);
+    }
+
+    /*
+     * Writes text so that it ENDS 60 pixels from the right edge of the picture,
+     * lining up with the 60-pixel margin on the left.
+     */
+    private void drawRightAligned(Graphics2D pen, String text, int y)
+    {
+        int textWidth = pen.getFontMetrics().stringWidth(text);
+        pen.drawString(text, WIDTH - TEXT_LEFT - textWidth, y);
+    }
+
+    // =====================================================================
+    //  The geometry. You do NOT need to follow the maths below - it only
+    //  decides WHERE things go. Everything above decides WHAT gets drawn.
+    // =====================================================================
+
+    /*
+     * Called once, by the constructor. Works out where the three corners go
+     * on the screen and stores them in ax, ay, bx, by, tx, ty.
+     *
+     * Your class only knows three lengths, not where the corners are,
+     * so we place them ourselves:
+     *   Corner A sits at (0, 0).
+     *   Corner B sits at (a, 0)   - so side1 is the flat bottom edge.
+     *   Corner T is the top. Side3 runs from A to T, side2 from B to T.
+     */
+    private void placeCorners()
+    {
+        double a = triangle.getSide1();
+        double b = triangle.getSide2();
+        double c = triangle.getSide3();
+
+        // Where T goes is a bit of algebra (two circles crossing).
+        double topX = (a * a + c * c - b * b) / (2 * a);   // how far across T is
+        double heightSquared = c * c - topX * topX;        // T's height, squared
+
+        // Some sets of three lengths cannot make a triangle at all - try 1, 2, 10.
+        // Then the "height squared" comes out zero or negative.
+        possible = a > 0 && b > 0 && c > 0 && heightSquared > 0;
+        if (possible)
+        {
+            double topY = Math.sqrt(heightSquared);
+
+            // SCALING. A 3-4-5 triangle is only 5 pixels wide - far too small
+            // to see. So we work out how much to multiply everything by to fill
+            // the box. T can lean out past A or B, so we find the true edges first.
+            double left  = Math.min(0, topX);
+            double right = Math.max(a, topX);
+            double scale = Math.min(DRAW_WIDTH / (right - left), DRAW_HEIGHT / topY);
+
+            // Centre the triangle across the picture.
+            double shift = (WIDTH - (right - left) * scale) / 2 - left * scale;
+
+            // Turn each corner into pixels. On a screen, y counts DOWN from
+            // the top, so the top corner SUBTRACTS its height.
+            int bottom = TOP + DRAW_HEIGHT;
+            ax = (int) Math.round(shift);
+            ay = bottom;
+            bx = (int) Math.round(shift + a * scale);
+            by = bottom;
+            tx = (int) Math.round(shift + topX * scale);
+            ty = (int) Math.round(bottom - topY * scale);
+        }
+    }
+
+    /*
+     * Writes one label next to the middle of the side from (x1, y1) to (x2, y2),
+     * on the side AWAY from the triangle's centre, so it never sits on the line.
+     */
+    private void labelSide(Graphics2D pen, String text, int x1, int y1, int x2, int y2)
+    {
+        // The middle of this side, and the centre of the whole triangle.
+        double midX = (x1 + x2) / 2.0;
+        double midY = (y1 + y2) / 2.0;
+        double centreX = (ax + bx + tx) / 3.0;
+        double centreY = (ay + by + ty) / 3.0;
+
+        // A direction at right angles to the side, made 1 pixel long.
+        double length = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+        double outX = (y2 - y1) / length;
+        double outY = (x1 - x2) / length;
+
+        // If that direction points back toward the centre, turn it around.
+        if (outX * (centreX - midX) + outY * (centreY - midY) > 0)
+        {
+            outX = -outX;
+            outY = -outY;
+        }
+
+        // Move outward far enough that the whole label clears the line:
+        // wide words need to move further sideways, so we allow for their size.
+        int textWidth  = pen.getFontMetrics().stringWidth(text);
+        int textHeight = 16;
+        double distance = 6 + Math.abs(outX) * textWidth / 2.0 + Math.abs(outY) * textHeight / 2.0;
+        double labelCentreX = midX + outX * distance;
+        double labelCentreY = midY + outY * distance;
+
+        // drawString wants the bottom-left corner of the words, not the centre.
+        int x = (int) Math.round(labelCentreX - textWidth / 2.0);
+        int y = (int) Math.round(labelCentreY + textHeight / 2.0 - 3);
+
+        // Never let a label hang off the edge of the picture.
+        x = Math.max(5, Math.min(x, WIDTH - textWidth - 5));
+        pen.drawString(text, x, y);
+    }
+}
